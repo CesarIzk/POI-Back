@@ -32,11 +32,11 @@ router.post("/login", async (req, res) => {
 
         // Generar JWT (reemplaza la sesión PHP)
         const payload = {
-            id:     usuario.IdUsuario,
-            nombre: usuario.Nombre,
-            email:  usuario.Email,
-            nivel:  usuario.Nivel  ?? 1,
-            exp:    usuario.Exp    ?? 0
+            id:        usuario.IdUsuario,
+            nombre:    usuario.Nombre,
+            email:     usuario.Email,
+            nivel:     usuario.Nivel    ?? 1,
+            puntos:    usuario.PuntoUs  ?? 0
         };
 
         const token = jwt.sign(payload, process.env.JWT_SECRET || "poi_secret", {
