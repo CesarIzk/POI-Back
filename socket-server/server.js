@@ -8,13 +8,16 @@ const app = express();
 const server = http.createServer(app);
 
 // ─── Middlewares ───────────────────────────────────────────
-app.use(cors({ origin: "*" }));
+// Después
+const allowedOrigin = process.env.FRONTEND_URL || "*";
+
+app.use(cors({ origin: allowedOrigin }));
+const io = new Server(server, {
+    cors: { origin: allowedOrigin, methods: ["GET", "POST"] }
+});
 app.use(express.json());
 
-// ─── Socket.io ─────────────────────────────────────────────
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+
 
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
