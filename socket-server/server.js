@@ -89,22 +89,23 @@ io.on("connection", (socket) => {
     });
 });
 
-app.get("/api/turn-credentials", (req, res) => {
-    const servers = [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-    ];
-
-    // Solo agregar TURN si están configuradas las 3 variables
-    if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
-        servers.push({
-            urls: process.env.TURN_URL,
-            username: process.env.TURN_USERNAME,
-            credential: process.env.TURN_CREDENTIAL
+app.get("/api/turn-credentials", async (req, res) => {
+    try {
+        const response = await fetch(
+            `https://${process.env.METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${process.env.METERED_API_KEY}`
+        );
+        const iceServers = await response.json();
+        res.json({ iceServers });
+    } catch (err) {
+        console.error("Error obteniendo TURN credentials:", err);
+        // Fallback a solo STUN si falla
+        res.json({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" }
+            ]
         });
     }
-
-    res.json({ iceServers: servers });
 });
 
 // ─── Rutas ─────────────────────────────────────────────────
