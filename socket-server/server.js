@@ -90,6 +90,8 @@ io.on("connection", (socket) => {
 });
 
 app.get("/api/turn-credentials", async (req, res) => {
+    console.log("METERED_API_KEY:", process.env.METERED_API_KEY);
+    console.log("METERED_DOMAIN:", process.env.METERED_DOMAIN);
     try {
         const response = await fetch(
             `https://${process.env.METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${process.env.METERED_API_KEY}`
