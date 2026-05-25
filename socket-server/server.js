@@ -220,7 +220,17 @@ io.on("connection", (socket) => {
     });
 
     //
-    // ICE CANDIDATES
+    // VIDEO FRAME (relay de frames base64)
+    //
+    socket.on("videoFrame", ({ chatId, frame, from }) => {
+
+        if (!chatId || !frame) return;
+
+        socket.to("chat_" + chatId).emit("videoFrame", { chatId, frame, from });
+    });
+
+    //
+    // ICE CANDIDATES (se mantiene por compatibilidad)
     //
     socket.on("iceCandidate", ({
         chatId,
