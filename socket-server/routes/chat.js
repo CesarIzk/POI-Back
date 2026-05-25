@@ -6,19 +6,33 @@ const db = require("../db");
 router.use(auth);
 
 
-// ─── GET /api/chats ─────────────────────────────────────────
-// Equivale a ChatController.php?action=list
-router.get("/", async (req, res) => {
+// ─── POST /api/chats ─────────────────────────────────────────
+// Crea un nuevo chat
+router.post("/", async (req, res) => {
     const id_usuario = req.usuario.id;
+    const { nombre } = req.body;
+
+    if (!nombre || nombre.trim() === "") {
+        return res.json({ success: false, message: "El nombre del chat es obligatorio" });
+    }
+
+    if (nombre.trim().length > 30) {
+        return res.json({ success: false, message: "El nombre no puede superar 30 caracteres" });
+    }
 
     try {
-        const [rows] = await db.query("CALL SP_ObtenerChatUsuario(?)", [id_usuario]);
+        const [rows] = await db.query(
+            "CALL SP_CrearChat(?, ?)",
+            [id_usuario, nombre.trim()]
+        );
 
-        return res.json(rows[0] ?? []);
+        const nuevoIdChat = rows[0][0].NuevoIdChat;
+
+        return res.json({ success: true, id_chat: nuevoIdChat, message: "Chat creado correctamente" });
 
     } catch (err) {
-        console.error("Error obteniendo chats:", err);
-        return res.json({ success: false, message: "Error al obtener chats", error: err.message });
+        console.error("Error creando chat:", err);
+        return res.json({ success: false, message: "Error al crear chat", error: err.message });
     }
 });
 
