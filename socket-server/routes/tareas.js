@@ -1,17 +1,15 @@
 const router = require("express").Router();
 const auth   = require("../middleware/auth");
-const pool   = require("../db");
+const db     = require("../db");
 
 // ─── GET /api/tareas/:idUsuario ─────────────────────────────
-// Trae todas las tareas del usuario ordenadas por FechaLimite
 router.get("/:idUsuario", auth, async (req, res) => {
     const { idUsuario } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await db.execute(
             "CALL SP_GestionarTarea('SELECT', NULL, NULL, ?, NULL, NULL, NULL, NULL)",
             [idUsuario]
         );
-        // Los SP devuelven el result set en rows[0]
         return res.json({ success: true, tareas: rows[0] });
     } catch (err) {
         console.error("[GET tareas]", err);
@@ -20,21 +18,63 @@ router.get("/:idUsuario", auth, async (req, res) => {
 });
 
 // ─── PUT /api/tareas/:idTarea ───────────────────────────────
-// Actualiza el estatus de una tarea (marcar/desmarcar)
+// Actualiza estatus. Si se marca como completada, suma EXP al usuario.
 router.put("/:idTarea", auth, async (req, res) => {
-    const { idTarea }  = req.params;
-    const { estatus }  = req.body;          // boolean
+    const idUsuario  = req.usuario.id;
+    const { idTarea } = req.params;
+    const { estatus } = req.body;
 
     if (estatus === undefined) {
         return res.status(400).json({ success: false, message: "Falta el campo estatus" });
     }
 
     try {
-        await pool.execute(
+        // 1. Actualizar estatus de la tarea
+        await db.execute(
             "CALL SP_GestionarTarea('UPDATE', ?, NULL, NULL, NULL, NULL, ?, NULL)",
             [idTarea, estatus ? 1 : 0]
         );
-        return res.json({ success: true, message: "Tarea actualizada" });
+
+        let expResultado = null;
+
+        // 2. Si se marcó como completada → sumar EXP
+        if (estatus) {
+            // Obtener los puntos de la tarea
+            const [tareaRows] = await db.execute(
+                "CALL SP_GestionarTarea('SELECT', ?, NULL, NULL, NULL, NULL, NULL, NULL)",
+                [idTarea]
+            );
+            const tarea = tareaRows[0]?.[0];
+
+            if (tarea?.ValorPuntos) {
+                const [expRows] = await db.execute(
+                    "CALL SP_SumarExpUsuario(?, ?)",
+                    [idUsuario, tarea.ValorPuntos]
+                );
+                expResultado = expRows[0]?.[0];
+
+                // Emitir por socket en tiempo real
+                const io = req.app.get("io");
+                if (io && expResultado) {
+                    io.to(`user_${idUsuario}`).emit("expActualizada", expResultado);
+
+                    if (expResultado.SubioRango) {
+                        io.to(`user_${idUsuario}`).emit("subioDERango", {
+                            idRango:     expResultado.IdRango,
+                            nombreRango: expResultado.NombreRango,
+                            puntos:      expResultado.PuntosActuales
+                        });
+                    }
+                }
+            }
+        }
+
+        return res.json({
+            success: true,
+            message: "Tarea actualizada",
+            exp: expResultado   // null si se desmarcó, objeto con EXP si se completó
+        });
+
     } catch (err) {
         console.error("[PUT tarea]", err);
         return res.status(500).json({ success: false, message: "Error al actualizar tarea" });
