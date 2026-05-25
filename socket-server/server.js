@@ -33,7 +33,6 @@ io.on("connection", (socket) => {
 
     // ── Señalización WebRTC ───────────────────────────────
 
-    // 1. Offer (quien llama → quien recibe)
     socket.on("videoOffer", ({ chatId, offer, from }) => {
         const roomName = "chat_" + chatId;
         const room = io.sockets.adapter.rooms.get(roomName);
@@ -41,7 +40,6 @@ io.on("connection", (socket) => {
         socket.to(roomName).emit("videoOffer", { chatId, offer, from });
     });
 
-    // 2. Answer (quien recibe → quien llamó)
     socket.on("videoAnswer", ({ chatId, answer, from }) => {
         const roomName = "chat_" + chatId;
         const room = io.sockets.adapter.rooms.get(roomName);
@@ -49,17 +47,14 @@ io.on("connection", (socket) => {
         socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
     });
 
-    // 3. ICE candidates (ambos lados)
     socket.on("iceCandidate", ({ chatId, candidate }) => {
         socket.to("chat_" + chatId).emit("iceCandidate", { candidate });
     });
 
-    // 4. Colgar
     socket.on("videoHangup", ({ chatId }) => {
         socket.to("chat_" + chatId).emit("videoHangup");
     });
 
-    // 5. Rechazar
     socket.on("videoRejected", ({ chatId }) => {
         socket.to("chat_" + chatId).emit("videoRejected");
     });
@@ -70,9 +65,11 @@ io.on("connection", (socket) => {
 });
 
 // ─── Rutas ─────────────────────────────────────────────────
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/chats", require("./routes/chat"));
+app.use("/api/auth",    require("./routes/auth"));
+app.use("/api/chats",   require("./routes/chat"));
 app.use("/api/usuario", require("./routes/usuario"));
+app.use("/api/tareas",  require("./routes/tareas"));   // ← NUEVO
+app.use("/api/rangos",  require("./routes/rangos"));   // ← NUEVO
 
 // ─── Health check ──────────────────────────────────────────
 app.get("/", (req, res) => res.json({ status: "POI API running 🚀" }));
