@@ -8,7 +8,6 @@ const app = express();
 const server = http.createServer(app);
 
 // ─── Middlewares ───────────────────────────────────────────
-// Después
 const allowedOrigin = process.env.FRONTEND_URL || "*";
 
 app.use(cors({ origin: allowedOrigin }));
@@ -17,8 +16,6 @@ const io = new Server(server, {
 });
 app.use(express.json());
 
-
-
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
@@ -26,7 +23,7 @@ io.on("connection", (socket) => {
     socket.on("joinChat", (chatId) => {
         const room = "chat_" + chatId;
         socket.join(room);
-        console.log("Se unió a:", room);
+        console.log(`[joinChat] socket ${socket.id} → sala ${room}`);
     });
 
     socket.on("sendMessage", (data) => {
@@ -38,16 +35,19 @@ io.on("connection", (socket) => {
 
     // 1. Offer (quien llama → quien recibe)
     socket.on("videoOffer", ({ chatId, offer, from }) => {
-        socket.to("chat_" + chatId).emit("videoOffer", { chatId, offer, from });
+        const roomName = "chat_" + chatId;
+        const room = io.sockets.adapter.rooms.get(roomName);
+        console.log(`[videoOffer] sala: ${roomName}, miembros: ${room?.size ?? 0}`);
+        socket.to(roomName).emit("videoOffer", { chatId, offer, from });
     });
 
-   // 2. Answer (quien recibe → quien llamó)
-socket.on("videoAnswer", ({ chatId, answer, from }) => {
-    const roomName = "chat_" + chatId;
-    const room = io.sockets.adapter.rooms.get(roomName);
-    console.log(`[videoAnswer] sala: ${roomName}, miembros: ${room?.size ?? 0}`, [...(room ?? [])]);
-    socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
-});
+    // 2. Answer (quien recibe → quien llamó)
+    socket.on("videoAnswer", ({ chatId, answer, from }) => {
+        const roomName = "chat_" + chatId;
+        const room = io.sockets.adapter.rooms.get(roomName);
+        console.log(`[videoAnswer] sala: ${roomName}, miembros: ${room?.size ?? 0}`, [...(room ?? [])]);
+        socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
+    });
 
     // 3. ICE candidates (ambos lados)
     socket.on("iceCandidate", ({ chatId, candidate }) => {
