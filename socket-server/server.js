@@ -8,13 +8,24 @@ const app = express();
 const server = http.createServer(app);
 
 // ─── Middlewares ───────────────────────────────────────────
-const allowedOrigin = process.env.FRONTEND_URL || "*";
+const allowedOrigins = (process.env.FRONTEND_URL || "").split(",").map(s => s.trim()).filter(Boolean);
 
-app.use(cors({ origin: allowedOrigin }));
-const io = new Server(server, {
-    cors: { origin: allowedOrigin, methods: ["GET", "POST"] }
-});
-app.use(express.json());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
+
+// Explicitly handle preflight for all routes
+app.options("*", cors());
 
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
