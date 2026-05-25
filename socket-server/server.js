@@ -41,10 +41,13 @@ io.on("connection", (socket) => {
         socket.to("chat_" + chatId).emit("videoOffer", { chatId, offer, from });
     });
 
-    // 2. Answer (quien recibe → quien llamó)
-    socket.on("videoAnswer", ({ chatId, answer, from }) => {
-        socket.to("chat_" + chatId).emit("videoAnswer", { chatId, answer, from });
-    });
+   // 2. Answer (quien recibe → quien llamó)
+socket.on("videoAnswer", ({ chatId, answer, from }) => {
+    const roomName = "chat_" + chatId;
+    const room = io.sockets.adapter.rooms.get(roomName);
+    console.log(`[videoAnswer] sala: ${roomName}, miembros: ${room?.size ?? 0}`, [...(room ?? [])]);
+    socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
+});
 
     // 3. ICE candidates (ambos lados)
     socket.on("iceCandidate", ({ chatId, candidate }) => {
