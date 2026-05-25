@@ -88,7 +88,18 @@ io.on("connection", (socket) => {
         console.log("Usuario desconectado:", socket.id);
     });
 });
-
+app.get("/api/turn-credentials", (req, res) => {
+    res.json({
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: process.env.TURN_URL,
+                username: process.env.TURN_USERNAME,
+                credential: process.env.TURN_CREDENTIAL
+            }
+        ]
+    });
+});
 // ─── Rutas ─────────────────────────────────────────────────
 app.use("/api/auth",    require("./routes/auth"));
 app.use("/api/chats",   require("./routes/chat"));
