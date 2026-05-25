@@ -6,6 +6,20 @@ const db = require("../db");
 router.use(auth);
 
 
+// ─── GET /api/chats ──────────────────────────────────────────
+// Lista los chats del usuario autenticado
+router.get("/", async (req, res) => {
+    const id_usuario = req.usuario.id;
+    try {
+        const [rows] = await db.query("CALL SP_ObtenerChatUsuario(?)", [id_usuario]);
+        return res.json(rows[0] ?? []);
+    } catch (err) {
+        console.error("Error obteniendo chats:", err);
+        return res.json({ success: false, message: "Error al obtener chats", error: err.message });
+    }
+});
+
+
 // ─── POST /api/chats ─────────────────────────────────────────
 // Crea un nuevo chat
 router.post("/", async (req, res) => {
