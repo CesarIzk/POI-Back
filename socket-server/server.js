@@ -1,42 +1,55 @@
 require("dotenv").config();
-const express = require("express");
-const http    = require("http");
-const { Server } = require("socket.io");
-const cors    = require("cors");
 
-const app    = express();
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+
+const app = express();
 const server = http.createServer(app);
 
-// ─── CORS origins ──────────────────────────────────────────
-// En Railway agrega FRONTEND_URL=https://tuapp.netlify.app
-// Puedes poner varias separadas por coma
+//
+// ──────────────────────────────────────────────────────────
+// CORS
+// ──────────────────────────────────────────────────────────
+//
+
 const allowedOrigins = (process.env.FRONTEND_URL || "*")
     .split(",")
     .map(s => s.trim())
     .filter(Boolean);
 
 const corsOriginFn = (origin, callback) => {
-    // Permitir requests sin origin (Postman, mobile apps, etc.)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+
+    if (
+        allowedOrigins.includes("*") ||
+        allowedOrigins.includes(origin)
+    ) {
         return callback(null, true);
     }
+
+    console.log("⛔ CORS bloqueado:", origin);
     return callback(new Error(`CORS bloqueado: ${origin}`));
 };
 
-// ─── Express middlewares ───────────────────────────────────
 app.use(cors({
     origin: corsOriginFn,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    // credentials solo si NO usas origin: "*"
     credentials: !allowedOrigins.includes("*"),
     optionsSuccessStatus: 204
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Socket.IO ─────────────────────────────────────────────
+//
+// ──────────────────────────────────────────────────────────
+// SOCKET.IO
+// ──────────────────────────────────────────────────────────
+//
+
 const io = new Server(server, {
     cors: {
         origin: corsOriginFn,
@@ -45,107 +58,286 @@ const io = new Server(server, {
     }
 });
 
-// Mapa: usuarioId → socket.id (para notificar llamadas aunque no estén en el room)
+//
+// usuarioId -> socket.id
+//
 const usuarioSockets = new Map();
 
-io.on("connection", (socket) => {
-    console.log("🔌 Conectado:", socket.id);
+//
+// socket.id -> usuarioId
+//
+const socketUsuarios = new Map();
 
-    // El cliente se registra con su id de usuario al conectar
+io.on("connection", (socket) => {
+
+    console.log("🔌 Socket conectado:", socket.id);
+
+    //
+    // ──────────────────────────────────────────────────────
+    // REGISTRO DE USUARIO
+    // ──────────────────────────────────────────────────────
+    //
+
     socket.on("register", (usuarioId) => {
-        if (usuarioId) {
-            usuarioSockets.set(String(usuarioId), socket.id);
-            console.log(`[register] usuario ${usuarioId} → socket ${socket.id}`);
-        }
+
+        if (!usuarioId) return;
+
+        usuarioId = String(usuarioId);
+
+        usuarioSockets.set(usuarioId, socket.id);
+        socketUsuarios.set(socket.id, usuarioId);
+
+        console.log(`✅ Usuario ${usuarioId} registrado -> ${socket.id}`);
     });
 
-    // ── Chat ──────────────────────────────────────────────
+    //
+    // ──────────────────────────────────────────────────────
+    // CHATS
+    // ──────────────────────────────────────────────────────
+    //
+
     socket.on("joinChat", (chatId) => {
-        const room = "chat_" + chatId;
-        socket.join(room);
-        console.log(`[joinChat] ${socket.id} → ${room} (miembros: ${io.sockets.adapter.rooms.get(room)?.size ?? 1})`);
+
+        if (!chatId) return;
+
+        const roomName = "chat_" + chatId;
+
+        socket.join(roomName);
+
+        const roomSize =
+            io.sockets.adapter.rooms.get(roomName)?.size || 0;
+
+        console.log(
+            `📥 ${socket.id} unido a ${roomName} (${roomSize} usuarios)`
+        );
+    });
+
+    socket.on("leaveChat", (chatId) => {
+
+        if (!chatId) return;
+
+        const roomName = "chat_" + chatId;
+
+        socket.leave(roomName);
+
+        console.log(`📤 ${socket.id} salió de ${roomName}`);
     });
 
     socket.on("sendMessage", (data) => {
-        io.to("chat_" + data.chatId).emit("receiveMessage", data);
+
+        if (!data?.chatId) return;
+
+        io.to("chat_" + data.chatId)
+            .emit("receiveMessage", data);
     });
 
-    // ── Señalización WebRTC ───────────────────────────────
+    //
+    // ──────────────────────────────────────────────────────
+    // WEBRTC SIGNALING
+    // ──────────────────────────────────────────────────────
+    //
 
-    // Offer: se emite a todos en el room Y directamente al socket del destinatario
-    // para que reciba la llamada aunque no tenga el chat abierto
-    socket.on("videoOffer", ({ chatId, offer, from, toUsuarioId }) => {
+    //
+    // VIDEO OFFER
+    //
+    socket.on("videoOffer", ({
+        chatId,
+        offer,
+        from,
+        toUsuarioId
+    }) => {
+
+        if (!chatId || !offer) return;
+
         const roomName = "chat_" + chatId;
-        const room = io.sockets.adapter.rooms.get(roomName);
-        console.log(`[videoOffer] sala: ${roomName}, miembros: ${room?.size ?? 0}, destino: ${toUsuarioId}`);
 
-        // Emitir al room (excluye al emisor)
-        socket.to(roomName).emit("videoOffer", { chatId, offer, from });
+        console.log(
+            `📞 OFFER chat=${chatId} from=${from} to=${toUsuarioId}`
+        );
 
-        // Si se especificó un destinatario y NO está en el room, notificarle directamente
+        //
+        // Enviar a usuarios del room
+        //
+        socket.to(roomName).emit("videoOffer", {
+            chatId,
+            offer,
+            from
+        });
+
+        //
+        // Enviar directo si no está dentro del room
+        //
         if (toUsuarioId) {
-            const destSocketId = usuarioSockets.get(String(toUsuarioId));
-            if (destSocketId && destSocketId !== socket.id) {
-                const destSocket = io.sockets.sockets.get(destSocketId);
-                if (destSocket && !destSocket.rooms.has(roomName)) {
-                    console.log(`[videoOffer] notificando directamente a socket ${destSocketId}`);
-                    destSocket.emit("videoOffer", { chatId, offer, from });
+
+            const targetSocketId =
+                usuarioSockets.get(String(toUsuarioId));
+
+            if (
+                targetSocketId &&
+                targetSocketId !== socket.id
+            ) {
+
+                const targetSocket =
+                    io.sockets.sockets.get(targetSocketId);
+
+                if (
+                    targetSocket &&
+                    !targetSocket.rooms.has(roomName)
+                ) {
+
+                    console.log(
+                        `📲 Enviando offer directo a ${targetSocketId}`
+                    );
+
+                    targetSocket.emit("videoOffer", {
+                        chatId,
+                        offer,
+                        from
+                    });
                 }
             }
         }
     });
 
-    socket.on("videoAnswer", ({ chatId, answer, from }) => {
-        const roomName = "chat_" + chatId;
-        console.log(`[videoAnswer] sala: ${roomName}`);
-        socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
+    //
+    // VIDEO ANSWER
+    //
+    socket.on("videoAnswer", ({
+        chatId,
+        answer,
+        from
+    }) => {
+
+        if (!chatId || !answer) return;
+
+        console.log(`✅ ANSWER chat=${chatId}`);
+
+        socket.to("chat_" + chatId).emit("videoAnswer", {
+            chatId,
+            answer,
+            from
+        });
     });
 
-    socket.on("iceCandidate", ({ chatId, candidate }) => {
-        socket.to("chat_" + chatId).emit("iceCandidate", { candidate });
+    //
+    // ICE CANDIDATES
+    //
+    socket.on("iceCandidate", ({
+        chatId,
+        candidate
+    }) => {
+
+        if (!chatId || !candidate) return;
+
+        socket.to("chat_" + chatId).emit("iceCandidate", {
+            candidate
+        });
     });
 
+    //
+    // COLGAR
+    //
     socket.on("videoHangup", ({ chatId }) => {
-        socket.to("chat_" + chatId).emit("videoHangup");
+
+        if (!chatId) return;
+
+        console.log(`📵 Hangup chat=${chatId}`);
+
+        socket.to("chat_" + chatId)
+            .emit("videoHangup");
     });
 
+    //
+    // RECHAZAR
+    //
     socket.on("videoRejected", ({ chatId }) => {
-        socket.to("chat_" + chatId).emit("videoRejected");
+
+        if (!chatId) return;
+
+        console.log(`❌ Rechazada chat=${chatId}`);
+
+        socket.to("chat_" + chatId)
+            .emit("videoRejected");
     });
+
+    //
+    // ──────────────────────────────────────────────────────
+    // DESCONECTAR
+    // ──────────────────────────────────────────────────────
+    //
 
     socket.on("disconnect", () => {
-        // Limpiar el registro del usuario
-        for (const [uid, sid] of usuarioSockets.entries()) {
-            if (sid === socket.id) {
-                usuarioSockets.delete(uid);
-                console.log(`[disconnect] usuario ${uid} eliminado del mapa`);
-                break;
-            }
+
+        console.log("❌ Socket desconectado:", socket.id);
+
+        const usuarioId = socketUsuarios.get(socket.id);
+
+        if (usuarioId) {
+
+            usuarioSockets.delete(usuarioId);
+            socketUsuarios.delete(socket.id);
+
+            console.log(`🧹 Usuario ${usuarioId} eliminado`);
         }
-        console.log("❌ Desconectado:", socket.id);
     });
 });
 
-// ─── Rutas API ─────────────────────────────────────────────
-app.use("/api/auth",    require("./routes/auth"));
-app.use("/api/chats",   require("./routes/chat"));
+//
+// ──────────────────────────────────────────────────────────
+// RUTAS API
+// ──────────────────────────────────────────────────────────
+//
+
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/chats", require("./routes/chat"));
 app.use("/api/usuario", require("./routes/usuario"));
 
-// Rutas opcionales — solo se cargan si el archivo existe
+//
+// Rutas opcionales
+//
 ["tareas", "rangos", "coach"].forEach(ruta => {
+
     try {
-        app.use(`/api/${ruta}`, require(`./routes/${ruta}`));
+
+        app.use(
+            `/api/${ruta}`,
+            require(`./routes/${ruta}`)
+        );
+
     } catch (e) {
-        console.warn(`⚠ Ruta /api/${ruta} no encontrada, se omite`);
+
+        console.warn(
+            `⚠ Ruta /api/${ruta} no encontrada`
+        );
     }
 });
 
-// ─── Health check ──────────────────────────────────────────
-app.get("/", (req, res) => res.json({ status: "POI API running 🚀" }));
+//
+// ──────────────────────────────────────────────────────────
+// HEALTH CHECK
+// ──────────────────────────────────────────────────────────
+//
 
-// ─── Puerto ────────────────────────────────────────────────
+app.get("/", (req, res) => {
+
+    res.json({
+        status: "POI API running 🚀"
+    });
+});
+
+//
+// ──────────────────────────────────────────────────────────
+// START SERVER
+// ──────────────────────────────────────────────────────────
+//
+
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Servidor en puerto ${PORT}`);
-    console.log(`🌐 CORS permitido para: ${allowedOrigins.join(", ")}`);
+
+    console.log(`🚀 Servidor iniciado en puerto ${PORT}`);
+
+    console.log(
+        `🌐 Origins permitidos: ${allowedOrigins.join(", ")}`
+    );
 });
