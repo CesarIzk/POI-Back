@@ -12,7 +12,6 @@ const allowedOrigins = (process.env.FRONTEND_URL || "").split(",").map(s => s.tr
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
       return callback(null, true);
@@ -21,11 +20,10 @@ app.use(cors({
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
+  credentials: true,
+  preflightContinue: false,   // ← cors() handles OPTIONS itself
+  optionsSuccessStatus: 204
 }));
-
-// Explicitly handle preflight for all routes
-app.options("*", cors());
 
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
