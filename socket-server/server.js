@@ -38,6 +38,9 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
+app.use(express.json());         // ← parses JSON request bodies
+app.use(express.urlencoded({ extended: true }));
+
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
