@@ -89,19 +89,22 @@ io.on("connection", (socket) => {
     });
 });
 
-// ─── TURN credentials (público, no requiere auth) ──────────
 app.get("/api/turn-credentials", (req, res) => {
-    res.json({
-        iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            {
-                urls: process.env.TURN_URL,
-                username: process.env.TURN_USERNAME,
-                credential: process.env.TURN_CREDENTIAL
-            }
-        ].filter(s => !s.urls || s.urls !== "undefined")  // omitir si no hay TURN configurado
-    });
+    const servers = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+    ];
+
+    // Solo agregar TURN si están configuradas las 3 variables
+    if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+        servers.push({
+            urls: process.env.TURN_URL,
+            username: process.env.TURN_USERNAME,
+            credential: process.env.TURN_CREDENTIAL
+        });
+    }
+
+    res.json({ iceServers: servers });
 });
 
 // ─── Rutas ─────────────────────────────────────────────────
