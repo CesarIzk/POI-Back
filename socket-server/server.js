@@ -6,6 +6,19 @@ const cors = require("cors");
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            const allowedOrigins = (process.env.FRONTEND_URL || "").split(",").map(s => s.trim()).filter(Boolean);
+            if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+                return callback(null, true);
+            }
+            return callback(new Error(`CORS blocked: ${origin}`));
+        },
+        methods: ["GET", "POST"]
+    }
+});
 
 // ─── Middlewares ───────────────────────────────────────────
 const allowedOrigins = (process.env.FRONTEND_URL || "").split(",").map(s => s.trim()).filter(Boolean);
