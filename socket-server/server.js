@@ -70,6 +70,7 @@ app.use("/api/chats",   require("./routes/chat"));
 app.use("/api/usuario", require("./routes/usuario"));
 app.use("/api/tareas",  require("./routes/tareas"));   // ← NUEVO
 app.use("/api/rangos",  require("./routes/rangos"));   // ← NUEVO
+app.use("/api/coach",   require("./routes/coach"));    // ← NUEVO
 
 // ─── Health check ──────────────────────────────────────────
 app.get("/", (req, res) => res.json({ status: "POI API running 🚀" }));
