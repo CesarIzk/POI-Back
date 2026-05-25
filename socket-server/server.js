@@ -58,8 +58,19 @@ io.on("connection", (socket) => {
         socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
     });
 
-    socket.on("iceCandidate", ({ chatId, candidate }) => {
-        socket.to("chat_" + chatId).emit("iceCandidate", { candidate });
+    //
+    // ICE CANDIDATES
+    //
+    socket.on("iceCandidate", ({
+        chatId,
+        candidate
+    }) => {
+
+        if (!chatId || !candidate) return;
+
+        socket.to("chat_" + chatId).emit("iceCandidate", {
+            candidate
+        });
     });
 
     socket.on("videoHangup", ({ chatId }) => {
