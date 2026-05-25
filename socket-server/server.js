@@ -88,18 +88,22 @@ io.on("connection", (socket) => {
         console.log("Usuario desconectado:", socket.id);
     });
 });
+
+// ─── TURN credentials (público, no requiere auth) ──────────
 app.get("/api/turn-credentials", (req, res) => {
     res.json({
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
             {
                 urls: process.env.TURN_URL,
                 username: process.env.TURN_USERNAME,
                 credential: process.env.TURN_CREDENTIAL
             }
-        ]
+        ].filter(s => !s.urls || s.urls !== "undefined")  // omitir si no hay TURN configurado
     });
 });
+
 // ─── Rutas ─────────────────────────────────────────────────
 app.use("/api/auth",    require("./routes/auth"));
 app.use("/api/chats",   require("./routes/chat"));
