@@ -17,14 +17,13 @@ const io = new Server(server, {
     cors: { origin: allowedOrigin, methods: ["GET", "POST"] }
 });
 
-// Exponer io a todas las rutas (para emitir desde Express)
 app.set("io", io);
 
 // ─── Socket.io ─────────────────────────────────────────────
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
-    // ── Sala personal del usuario (para EXP en tiempo real) ──
+    // ── Sala personal del usuario ─────────────────────────
     socket.on("joinUser", (idUsuario) => {
         const sala = `user_${idUsuario}`;
         socket.join(sala);
@@ -38,39 +37,33 @@ io.on("connection", (socket) => {
         console.log(`[joinChat] socket ${socket.id} → sala ${room}`);
     });
 
+    socket.on("leaveChat", (chatId) => {
+        socket.leave("chat_" + chatId);
+    });
+
     socket.on("sendMessage", (data) => {
         const room = "chat_" + data.chatId;
         io.to(room).emit("receiveMessage", data);
     });
 
-    // ── Señalización WebRTC ───────────────────────────────
-    socket.on("videoOffer", ({ chatId, offer, from }) => {
-        const roomName = "chat_" + chatId;
-        const room = io.sockets.adapter.rooms.get(roomName);
-        console.log(`[videoOffer] sala: ${roomName}, miembros: ${room?.size ?? 0}`);
-        socket.to(roomName).emit("videoOffer", { chatId, offer, from });
+    // ── Señalización videollamada (frames JPEG) ───────────
+
+    socket.on("videoOffer", ({ chatId, from }) => {
+        const room = "chat_" + chatId;
+        console.log(`[videoOffer] sala: ${room}, from: ${from}`);
+        socket.to(room).emit("videoOffer", { chatId, from });
     });
 
-    socket.on("videoAnswer", ({ chatId, answer, from }) => {
-        const roomName = "chat_" + chatId;
-        const room = io.sockets.adapter.rooms.get(roomName);
-        console.log(`[videoAnswer] sala: ${roomName}, miembros: ${room?.size ?? 0}`, [...(room ?? [])]);
-        socket.to(roomName).emit("videoAnswer", { chatId, answer, from });
+    socket.on("videoAnswer", ({ chatId, from }) => {
+        const room = "chat_" + chatId;
+        console.log(`[videoAnswer] sala: ${room}, from: ${from}`);
+        socket.to(room).emit("videoAnswer", { chatId, from });
     });
 
-    //
-    // ICE CANDIDATES
-    //
-    socket.on("iceCandidate", ({
-        chatId,
-        candidate
-    }) => {
-
-        if (!chatId || !candidate) return;
-
-        socket.to("chat_" + chatId).emit("iceCandidate", {
-            candidate
-        });
+    // ── Relay de frames JPEG ──────────────────────────────
+    socket.on("videoFrame", ({ chatId, frame, from }) => {
+        if (!chatId || !frame) return;
+        socket.to("chat_" + chatId).emit("videoFrame", { frame, from });
     });
 
     socket.on("videoHangup", ({ chatId }) => {
@@ -79,6 +72,12 @@ io.on("connection", (socket) => {
 
     socket.on("videoRejected", ({ chatId }) => {
         socket.to("chat_" + chatId).emit("videoRejected");
+    });
+
+    // ── ICE candidates (por si se migra a WebRTC en el futuro) ──
+    socket.on("iceCandidate", ({ chatId, candidate }) => {
+        if (!chatId || !candidate) return;
+        socket.to("chat_" + chatId).emit("iceCandidate", { candidate });
     });
 
     socket.on("disconnect", () => {
